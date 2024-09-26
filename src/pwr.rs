@@ -24,6 +24,15 @@ pub enum VosRange {
     LowPower = 0b10,
 }
 
+pub enum StopMode{
+    #[doc = "All clock and Vcore stopped Some periferal(i2cx,USARTx,LPUART) can wake up to recive a frame"]
+    STOP0 = 0b000,
+    #[doc = "Same as Stop 0 but the mair regulator is off"]
+    STOP1 = 0b001,
+    #[doc = "All clock and Vcore stopped Some periferal(i2c3,LPUART) can wake up to recive a frame"]
+    STOP2 = 0b010,
+}
+
 bitfield! {
   pub struct WakeUpSource(u16);
   impl Debug;
@@ -113,6 +122,33 @@ impl Pwr {
         cortex_m::asm::dsb();
         cortex_m::asm::wfi();
         loop {}
+    }
+
+    pub fn enter_stop_mode(&mut self, stp_mode: StopMode, scb: &mut SCB)
+    {
+        scb.set_sleepdeep();
+        self.scr.reg().write(|w| {
+            w.wuf1()
+                .set_bit()
+                .wuf2()
+                .set_bit()
+                .wuf3()
+                .set_bit()
+                .wuf4()
+                .set_bit()
+                .wuf5()
+                .set_bit()
+                .sbf()
+                .set_bit()
+        });
+        match stp_mode {
+            StopMode::STOP0 =>unsafe { self.cr1.reg().modify(|_, w| w.lpms().bits(0x000)) },
+            StopMode::STOP1 =>unsafe { self.cr1.reg().modify(|_, w| w.lpms().bits(0x001)) },
+            StopMode::STOP2 =>unsafe { self.cr1.reg().modify(|_, w| w.lpms().bits(0x010)) },
+        }
+        
+        cortex_m::asm::dsb();
+        cortex_m::asm::wfi();
     }
 
     /// Returns the reason, why wakeup from shutdown happened. In case there is more then one,
